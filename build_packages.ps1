@@ -9,12 +9,11 @@ $WorkspaceRoot = $PSScriptRoot
 Set-Location $WorkspaceRoot
 
 function Find-ISCC {
-    $cmd = Get-Command iscc.exe -ErrorAction SilentlyContinue
-    if ($cmd) { return $cmd.Source }
-
     $knownPaths = @(
         "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
         "C:\Program Files\Inno Setup 6\ISCC.exe",
+        "C:\Program Files (x86)\Inno Setup 5\ISCC.exe",
+        "C:\Program Files\Inno Setup 5\ISCC.exe",
         "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
         "$env:LOCALAPPDATA\Programs\Antigravity IDE\_\resources\app\node_modules\innosetup\bin\ISCC.exe"
     )
@@ -22,9 +21,15 @@ function Find-ISCC {
         if (Test-Path $p) { return $p }
     }
 
-    # Cari secara rekursif di LocalAppData jika belum ketemu
-    $found = Get-ChildItem -Path "$env:LOCALAPPDATA\Programs" -Filter "ISCC.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+    $cmd = Get-Command iscc.exe -ErrorAction SilentlyContinue
+    if ($cmd -and $cmd.Source -notmatch 'chocolatey') { 
+        return $cmd.Source 
+    }
+
+    $found = Get-ChildItem -Path "C:\Program Files (x86)", "C:\Program Files", "$env:LOCALAPPDATA\Programs" -Filter "ISCC.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($found) { return $found.FullName }
+
+    if ($cmd) { return $cmd.Source }
 
     return $null
 }
@@ -93,19 +98,37 @@ if ($Target -eq "standalone" -or $Target -eq "all") {
     if (-not $isccPath) {
         Write-Host "  [PERINGATAN] Inno Setup Compiler (ISCC.exe) tidak ditemukan!" -ForegroundColor Red
         Write-Host "  Silakan pasang Inno Setup 6 dari https://jrsoftware.org/isdl.php" -ForegroundColor Red
+        if ($env:CI -or $env:GITHUB_ACTIONS -or $Target -eq "standalone" -or $Target -eq "all") {
+            Write-Host "  [FATAL] ISCC wajib ada saat build standalone/CI!" -ForegroundColor Red
+            exit 1
+        }
     } else {
         Write-Host "  -> Menggunakan Inno Setup Compiler: $isccPath" -ForegroundColor DarkCyan
         $cleanVer = $Version.TrimStart('v')
-        & $isccPath "/DMyAppVersion=$cleanVer" $issFile
-        if ($LASTEXITCODE -eq 0) {
-            $installerExe = Get-ChildItem -Path $standaloneDir -Filter "*Installer*.exe" | Select-Object -First 1
-            if ($installerExe) {
-                $installerSize = [math]::Round($installerExe.Length / 1MB, 2)
-                Write-Host "  -> Standalone Installer: $($installerExe.FullName) ($installerSize MB)" -ForegroundColor Green
-            }
-        } else {
-            Write-Host "  Gagal mengompilasi installer dengan Inno Setup!" -ForegroundColor Red
+        $issFile = Join-Path $WorkspaceRoot "installer.iss"
+        
+        # Injeksi versi langsung ke dalam installer.iss sebagai fallback pasti
+        $newVerLine = "#define MyAppVersion `"$cleanVer`""
+        $issContent = (Get-Content $issFile) -replace '^#define MyAppVersion\s+.*', $newVerLine
+        Set-Content -Path $issFile -Value $issContent -Encoding UTF8
+
+        & "$isccPath" "/DMyAppVersion=$cleanVer" "$issFile"
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "  -> Retrying ISCC without /D parameter..." -ForegroundColor Yellow
+            & "$isccPath" "$issFile"
         }
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "  [FATAL] Gagal mengompilasi installer dengan Inno Setup!" -ForegroundColor Red
+            exit 1
+        }
+
+        $installerExe = Get-ChildItem -Path $standaloneDir -Filter "*Installer*.exe" | Select-Object -First 1
+        if (-not $installerExe) {
+            Write-Host "  [FATAL] File installer tidak ditemukan di $standaloneDir!" -ForegroundColor Red
+            exit 1
+        }
+        $installerSize = [math]::Round($installerExe.Length / 1MB, 2)
+        Write-Host "  -> Standalone Installer: $($installerExe.FullName) ($installerSize MB)" -ForegroundColor Green
     }
 
     $standaloneReadme = @"

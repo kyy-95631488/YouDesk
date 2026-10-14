@@ -26,6 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       release_tag: ${{ steps.tag_step.outputs.release_tag }}
+      clean_version: ${{ steps.tag_step.outputs.clean_version }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -70,7 +71,9 @@ jobs:
             git tag "$TAG"
             git push origin "$TAG"
           fi
+          CLEAN_VER="${TAG#v}"
           echo "release_tag=$TAG" >> $GITHUB_OUTPUT
+          echo "clean_version=$CLEAN_VER" >> $GITHUB_OUTPUT
 
       - name: Auto-Update Repository About, Homepage & Topics
         env:
@@ -119,8 +122,11 @@ jobs:
           go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
       - name: Install Inno Setup
+        shell: powershell
         run: |
           choco install innosetup -y
+          echo "C:\Program Files (x86)\Inno Setup 6" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "C:\Program Files\Inno Setup 6" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: Install Frontend Dependencies & Build Frontend
         run: |
@@ -159,10 +165,21 @@ jobs:
         shell: powershell
         run: |
           New-Item -ItemType Directory -Path "dist\windows-flat" -Force | Out-Null
-          Get-ChildItem -Path "dist\standalone" -Filter "*Installer*.exe" | Copy-Item -Destination "dist\windows-flat\" -Force
+          
+          # Strictly verify that Inno Setup Installer exists
+          $installers = Get-ChildItem -Path "dist\standalone" -Filter "*Installer*.exe"
+          if ($installers.Count -eq 0) {
+              Write-Error "CRITICAL: Inno Setup Installer (*Installer*.exe) was NOT generated in dist\standalone!"
+              exit 1
+          }
+          foreach ($i in $installers) {
+              Copy-Item $i.FullName -Destination "dist\windows-flat\" -Force
+          }
+
           Copy-Item "dist\standalone\YouTubeDESK.exe" -Destination "dist\windows-flat\" -Force
           Copy-Item "dist\portable\YouTubeDESK-Portable.zip" -Destination "dist\windows-flat\" -Force
-          Write-Host "Staged Windows Files:"
+          
+          Write-Host "=== Verified Staged Windows Files ==="
           Get-ChildItem "dist\windows-flat" | Select-Object Name, Length
 
       - name: Upload Windows Artifacts
@@ -326,6 +343,15 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
+          body: |
+            ## 🚀 YouDesk ${{ needs.prepare-tag.outputs.release_tag }}
+
+            ### 📦 Official Installation Packages:
+            - **`YouTubeDESK-Installer-${{ needs.prepare-tag.outputs.release_tag }}.exe`**: 🪟 Windows Setup Installer (Inno Setup 6 Wizard, Desktop & Start Menu shortcut, uninstaller, yt-dlp & FFmpeg engines).
+            - **`YouTubeDESK-Portable.zip`**: 🪟 Windows Portable Bundle (extract & run directly).
+            - **`YouTubeDESK.exe`**: 🪟 Windows Standalone executable.
+            - **`youdesk_${{ needs.prepare-tag.outputs.clean_version }}_amd64.deb`**: 🐧 Ubuntu / Debian Package (`sudo dpkg -i`).
+            - **`YouTubeDESK-linux-amd64.tar.gz`**: 🐧 Generic Linux Portable Archive.
           files: release-assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
