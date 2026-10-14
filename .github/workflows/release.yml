@@ -18,6 +18,9 @@ permissions:
   issues: write
 
 jobs:
+  # ====================================================================
+  # JOB 1: Menentukan Tag Versi & Update Metadata Repository (About)
+  # ====================================================================
   prepare-tag:
     name: Prepare Tag & Repo Metadata
     runs-on: ubuntu-latest
@@ -87,10 +90,13 @@ jobs:
             --add-topic "inno-setup" \
             --add-topic "media-player" \
             --add-topic "linux" \
-            --add-topic "ubuntu" || echo "Skipping repo metadata update (insufficient permission)"
+            --add-topic "ubuntu" || echo "Skipping repo metadata update"
 
+  # ====================================================================
+  # JOB 2: Build Binaries Windows (Inno Setup Installer + Portable ZIP)
+  # ====================================================================
   build-windows:
-    name: Build Windows Release
+    name: Build Windows Packages
     needs: prepare-tag
     runs-on: windows-latest
     steps:
@@ -149,23 +155,21 @@ jobs:
         run: |
           powershell -ExecutionPolicy Bypass -File .\build_packages.ps1 -Target all -Version "${{ needs.prepare-tag.outputs.release_tag }}"
 
-      - name: Publish Windows Release Assets
-        uses: softprops/action-gh-release@v2
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: ${{ needs.prepare-tag.outputs.release_tag }}
-          name: YouDesk ${{ needs.prepare-tag.outputs.release_tag }}
-          draft: false
-          prerelease: false
-          generate_release_notes: true
-          files: |
+          name: windows-assets
+          path: |
             dist/standalone/*Installer*.exe
             dist/standalone/YouTubeDESK.exe
             dist/portable/YouTubeDESK-Portable.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          retention-days: 1
 
+  # ====================================================================
+  # JOB 3: Build Binaries Linux (Ubuntu .deb + Generic .tar.gz)
+  # ====================================================================
   build-linux:
-    name: Build Linux (Ubuntu) Release
+    name: Build Linux (Ubuntu) Packages
     needs: prepare-tag
     runs-on: ubuntu-22.04
     steps:
@@ -262,15 +266,51 @@ jobs:
           chmod +x "$PORTABLE_DIR/YouDesk"
           tar -czvf "dist/linux/YouTubeDESK-linux-amd64.tar.gz" -C dist/linux YouDesk-linux-amd64
 
-      - name: Publish Linux Release Assets
+      - name: Upload Linux Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-assets
+          path: |
+            dist/linux/*.deb
+            dist/linux/*.tar.gz
+          retention-days: 1
+
+  # ====================================================================
+  # JOB 4: Menggabungkan Semua Paket Windows & Linux ke Dalam 1 Rilis
+  # ====================================================================
+  publish-unified-release:
+    name: Publish Unified Release (Windows & Linux)
+    needs: [prepare-tag, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create Assets Directory
+        run: mkdir -p release-assets
+
+      - name: Download Windows Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-assets
+          path: release-assets
+
+      - name: Download Linux Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-assets
+          path: release-assets
+
+      - name: List All Downloaded Release Assets
+        run: |
+          echo "=== Release Assets to Publish ==="
+          ls -la release-assets
+
+      - name: Publish Unified Release to GitHub
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.prepare-tag.outputs.release_tag }}
           name: YouDesk ${{ needs.prepare-tag.outputs.release_tag }}
           draft: false
           prerelease: false
-          files: |
-            dist/linux/*.deb
-            dist/linux/*.tar.gz
+          generate_release_notes: true
+          files: release-assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
