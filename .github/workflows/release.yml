@@ -155,14 +155,21 @@ jobs:
         run: |
           powershell -ExecutionPolicy Bypass -File .\build_packages.ps1 -Target all -Version "${{ needs.prepare-tag.outputs.release_tag }}"
 
+      - name: Stage Windows Release Files
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Path "dist\windows-flat" -Force | Out-Null
+          Get-ChildItem -Path "dist\standalone" -Filter "*Installer*.exe" | Copy-Item -Destination "dist\windows-flat\" -Force
+          Copy-Item "dist\standalone\YouTubeDESK.exe" -Destination "dist\windows-flat\" -Force
+          Copy-Item "dist\portable\YouTubeDESK-Portable.zip" -Destination "dist\windows-flat\" -Force
+          Write-Host "Staged Windows Files:"
+          Get-ChildItem "dist\windows-flat" | Select-Object Name, Length
+
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows-assets
-          path: |
-            dist/standalone/*Installer*.exe
-            dist/standalone/YouTubeDESK.exe
-            dist/portable/YouTubeDESK-Portable.zip
+          path: dist/windows-flat/*
           retention-days: 1
 
   # ====================================================================
@@ -266,13 +273,19 @@ jobs:
           chmod +x "$PORTABLE_DIR/YouDesk"
           tar -czvf "dist/linux/YouTubeDESK-linux-amd64.tar.gz" -C dist/linux YouDesk-linux-amd64
 
+      - name: Stage Linux Release Files
+        run: |
+          mkdir -p dist/linux-flat
+          cp dist/linux/*.deb dist/linux-flat/
+          cp dist/linux/*.tar.gz dist/linux-flat/
+          echo "Staged Linux Files:"
+          ls -lh dist/linux-flat
+
       - name: Upload Linux Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: linux-assets
-          path: |
-            dist/linux/*.deb
-            dist/linux/*.tar.gz
+          path: dist/linux-flat/*
           retention-days: 1
 
   # ====================================================================
@@ -298,10 +311,12 @@ jobs:
           name: linux-assets
           path: release-assets
 
-      - name: List All Downloaded Release Assets
+      - name: Flatten All Assets
         run: |
-          echo "=== Release Assets to Publish ==="
-          ls -la release-assets
+          find release-assets -type f -exec mv -t release-assets {} +
+          find release-assets -mindepth 1 -type d -delete
+          echo "=== All Final Release Assets to Publish ==="
+          ls -lh release-assets
 
       - name: Publish Unified Release to GitHub
         uses: softprops/action-gh-release@v2
