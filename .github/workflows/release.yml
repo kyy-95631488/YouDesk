@@ -1,0 +1,150 @@
+name: Release & Packaging Pipeline
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release Tag Name (e.g. v1.0.0)'
+        required: false
+        default: 'v1.0.0'
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  prepare-tag:
+    name: Prepare Tag & Repo Metadata
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.tag_step.outputs.release_tag }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine or Create Git Tag
+        id: tag_step
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          elif [ -n "${{ github.event.inputs.tag_name }}" ]; then
+            TAG="${{ github.event.inputs.tag_name }}"
+          else
+            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v1.0.0")
+            if [[ "$LATEST_TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              MAJOR="${BASH_REMATCH[1]}"
+              MINOR="${BASH_REMATCH[2]}"
+              PATCH="${BASH_REMATCH[3]}"
+              PATCH=$((PATCH + 1))
+              TAG="v${MAJOR}.${MINOR}.${PATCH}"
+            else
+              TAG="v1.0.1"
+            fi
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag "$TAG"
+            git push origin "$TAG" || echo "Tag already pushed"
+          fi
+          echo "release_tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Auto-Update Repository About, Homepage & Topics
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh repo edit \
+            --description "🚀 Modern, lightweight, and ultra-fast YouTube desktop client built with Go, Wails, React, and yt-dlp." \
+            --homepage "https://github.com/${{ github.repository }}" \
+            --add-topic "youtube" \
+            --add-topic "desktop-app" \
+            --add-topic "wails" \
+            --add-topic "golang" \
+            --add-topic "react" \
+            --add-topic "typescript" \
+            --add-topic "yt-dlp" \
+            --add-topic "ffmpeg" \
+            --add-topic "inno-setup" \
+            --add-topic "media-player" || echo "Skipping repo metadata update (insufficient permission)"
+
+  build-windows:
+    name: Build Windows Release
+    needs: prepare-tag
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          check-latest: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Wails CLI
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Install Inno Setup
+        run: |
+          choco install innosetup -y
+
+      - name: Install Frontend Dependencies & Build Frontend
+        run: |
+          cd frontend
+          npm ci || npm install
+          npm run build
+          cd ..
+
+      - name: Download Offline Media Engines (yt-dlp & FFmpeg)
+        shell: powershell
+        run: |
+          if (-not (Test-Path "build\bin")) { New-Item -ItemType Directory -Path "build\bin" -Force | Out-Null }
+
+          Write-Host "Downloading yt-dlp.exe..."
+          Invoke-WebRequest -Uri "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe" -OutFile "build\bin\yt-dlp.exe"
+
+          Write-Host "Downloading FFmpeg bundle..."
+          $ffmpegZip = "$env:TEMP\ffmpeg.zip"
+          Invoke-WebRequest -Uri "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip" -OutFile $ffmpegZip
+          Expand-Archive -Path $ffmpegZip -DestinationPath "$env:TEMP\ffmpeg-extracted" -Force
+          $ffmpegExe = Get-ChildItem -Path "$env:TEMP\ffmpeg-extracted" -Filter "ffmpeg.exe" -Recurse | Select-Object -First 1
+          $ffprobeExe = Get-ChildItem -Path "$env:TEMP\ffmpeg-extracted" -Filter "ffprobe.exe" -Recurse | Select-Object -First 1
+          Copy-Item $ffmpegExe.FullName -Destination "build\bin\ffmpeg.exe" -Force
+          Copy-Item $ffprobeExe.FullName -Destination "build\bin\ffprobe.exe" -Force
+
+      - name: Build Wails Application
+        run: |
+          wails build -platform windows/amd64
+
+      - name: Build Standalone Installer & Portable Package
+        shell: powershell
+        run: |
+          powershell -ExecutionPolicy Bypass -File .\build_packages.ps1 -Target all
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare-tag.outputs.release_tag }}
+          name: YouDesk ${{ needs.prepare-tag.outputs.release_tag }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            dist/standalone/YouTubeDESK-Installer-v1.0.0.exe
+            dist/standalone/YouTubeDESK.exe
+            dist/portable/YouTubeDESK-Portable.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
