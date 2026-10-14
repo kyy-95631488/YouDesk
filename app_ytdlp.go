@@ -15,29 +15,76 @@ import (
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
+func getYtDlpPath() string {
+	ext := ""
+	if runtime.GOOS == "windows" {
+		ext = ".exe"
+	}
+	localBin := filepath.Join(getExeDir(), "yt-dlp"+ext)
+	if _, err := os.Stat(localBin); err == nil {
+		return localBin
+	}
+	if p, err := exec.LookPath("yt-dlp" + ext); err == nil {
+		return p
+	}
+	return localBin
+}
+
+func getFFmpegPath() string {
+	ext := ""
+	if runtime.GOOS == "windows" {
+		ext = ".exe"
+	}
+	localBin := filepath.Join(getExeDir(), "ffmpeg"+ext)
+	if _, err := os.Stat(localBin); err == nil {
+		return localBin
+	}
+	if p, err := exec.LookPath("ffmpeg" + ext); err == nil {
+		return p
+	}
+	return localBin
+}
+
+func getFFprobePath() string {
+	ext := ""
+	if runtime.GOOS == "windows" {
+		ext = ".exe"
+	}
+	localBin := filepath.Join(getExeDir(), "ffprobe"+ext)
+	if _, err := os.Stat(localBin); err == nil {
+		return localBin
+	}
+	if p, err := exec.LookPath("ffprobe" + ext); err == nil {
+		return p
+	}
+	return localBin
+}
+
 func (a *App) CheckYtDlp() bool {
 	ext := ""
 	if runtime.GOOS == "windows" {
 		ext = ".exe"
 	}
 	if _, err := os.Stat(filepath.Join(getExeDir(), "yt-dlp"+ext)); os.IsNotExist(err) {
-		return false
+		if _, err := exec.LookPath("yt-dlp" + ext); err != nil {
+			return false
+		}
 	}
 	if _, err := os.Stat(filepath.Join(getExeDir(), "ffmpeg"+ext)); os.IsNotExist(err) {
-		return false
+		if _, err := exec.LookPath("ffmpeg" + ext); err != nil {
+			return false
+		}
 	}
 	if _, err := os.Stat(filepath.Join(getExeDir(), "ffprobe"+ext)); os.IsNotExist(err) {
-		return false
+		if _, err := exec.LookPath("ffprobe" + ext); err != nil {
+			return false
+		}
 	}
 	return true
 }
 
 func (a *App) UpdateYtDlp() string {
-	ext := ""
-	if runtime.GOOS == "windows" {
-		ext = ".exe"
-	}
-	binName := filepath.Join(getExeDir(), "yt-dlp"+ext)
+	binName := getYtDlpPath()
 
 	cmd := exec.Command(binName, "-U")
 	hideWindow(cmd)

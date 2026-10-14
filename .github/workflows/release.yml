@@ -1,4 +1,4 @@
-name: Release & Packaging Pipeline
+name: Multiplatform Release & Packaging Pipeline
 
 on:
   push:
@@ -47,7 +47,7 @@ jobs:
               PATCH=$((PATCH + 1))
               TAG="v${MAJOR}.${MINOR}.${PATCH}"
             else
-              TAG="v1.0.1"
+              TAG="v1.0.3"
             fi
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -72,7 +72,9 @@ jobs:
             --add-topic "yt-dlp" \
             --add-topic "ffmpeg" \
             --add-topic "inno-setup" \
-            --add-topic "media-player" || echo "Skipping repo metadata update (insufficient permission)"
+            --add-topic "media-player" \
+            --add-topic "linux" \
+            --add-topic "ubuntu" || echo "Skipping repo metadata update (insufficient permission)"
 
   build-windows:
     name: Build Windows Release
@@ -134,7 +136,7 @@ jobs:
         run: |
           powershell -ExecutionPolicy Bypass -File .\build_packages.ps1 -Target all
 
-      - name: Publish GitHub Release
+      - name: Publish Windows Release Assets
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.prepare-tag.outputs.release_tag }}
@@ -146,5 +148,117 @@ jobs:
             dist/standalone/YouTubeDESK-Installer-v1.0.0.exe
             dist/standalone/YouTubeDESK.exe
             dist/portable/YouTubeDESK-Portable.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-linux:
+    name: Build Linux (Ubuntu) Release
+    needs: prepare-tag
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          check-latest: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Linux Build Dependencies (GTK3 & WebKit2GTK)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev || \
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libayatana-appindicator3-dev
+
+      - name: Install Wails CLI
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Install Frontend Dependencies & Build Frontend
+        run: |
+          cd frontend
+          npm ci || npm install
+          npm run build
+          cd ..
+
+      - name: Build Wails Binary for Linux
+        run: |
+          wails build -platform linux/amd64
+
+      - name: Package Linux Artifacts (.deb & .tar.gz)
+        run: |
+          VERSION="${{ needs.prepare-tag.outputs.release_tag }}"
+          CLEAN_VER="${VERSION#v}"
+          mkdir -p dist/linux
+
+          # 1. Package .deb installer for Ubuntu / Debian
+          DEB_DIR="dist/linux/deb_pkg"
+          mkdir -p "$DEB_DIR/DEBIAN"
+          mkdir -p "$DEB_DIR/usr/bin"
+          mkdir -p "$DEB_DIR/usr/share/applications"
+          mkdir -p "$DEB_DIR/usr/share/icons/hicolor/512x512/apps"
+
+          cp build/bin/YouTubeDESK "$DEB_DIR/usr/bin/youdesk"
+          chmod 755 "$DEB_DIR/usr/bin/youdesk"
+
+          cp build/appicon.png "$DEB_DIR/usr/share/icons/hicolor/512x512/apps/youdesk.png"
+
+          cat << 'EOF' > "$DEB_DIR/usr/share/applications/youdesk.desktop"
+          [Desktop Entry]
+          Name=YouDesk
+          Comment=Modern YouTube Desktop Client
+          Exec=/usr/bin/youdesk
+          Icon=youdesk
+          Terminal=false
+          Type=Application
+          Categories=AudioVideo;Player;Network;
+          EOF
+
+          cat << EOF > "$DEB_DIR/DEBIAN/control"
+          Package: youdesk
+          Version: $CLEAN_VER
+          Section: video
+          Priority: optional
+          Architecture: amd64
+          Maintainer: kyy-95631488 <riskir5622@gmail.com>
+          Description: Modern, lightweight YouTube desktop client built with Go, Wails, React, and yt-dlp.
+          EOF
+
+          dpkg-deb --build "$DEB_DIR" "dist/linux/youdesk_${CLEAN_VER}_amd64.deb"
+
+          # 2. Package Portable Tarball for any Linux Distro
+          PORTABLE_DIR="dist/linux/YouDesk-linux-amd64"
+          mkdir -p "$PORTABLE_DIR"
+          cp build/bin/YouTubeDESK "$PORTABLE_DIR/YouDesk"
+          cp build/appicon.png "$PORTABLE_DIR/icon.png"
+          cat << 'EOF' > "$PORTABLE_DIR/youdesk.desktop"
+          [Desktop Entry]
+          Name=YouDesk
+          Comment=Modern YouTube Desktop Client
+          Exec=./YouDesk
+          Icon=./icon.png
+          Terminal=false
+          Type=Application
+          Categories=AudioVideo;Player;Network;
+          EOF
+          chmod +x "$PORTABLE_DIR/YouDesk"
+          tar -czvf "dist/linux/YouTubeDESK-linux-amd64.tar.gz" -C dist/linux YouDesk-linux-amd64
+
+      - name: Publish Linux Release Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare-tag.outputs.release_tag }}
+          name: YouDesk ${{ needs.prepare-tag.outputs.release_tag }}
+          draft: false
+          prerelease: false
+          files: |
+            dist/linux/*.deb
+            dist/linux/*.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

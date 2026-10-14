@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
@@ -89,18 +88,15 @@ func (a *App) DownloadMedia(videoURL string, formatID string, isAudio bool, titl
 		return "Cancelled", nil
 	}
 
-	extExe := ""
-	if runtime.GOOS == "windows" {
-		extExe = ".exe"
-	}
-	binName := filepath.Join(getExeDir(), "yt-dlp"+extExe)
+	binName := getYtDlpPath()
+	ffmpegLocation := filepath.Dir(getFFmpegPath())
 
 	var args []string
 	if isAudio {
-		args = []string{"--ffmpeg-location", getExeDir(), "--newline", "-f", formatID, "-x", "--audio-format", "mp3", "-o", savePath, videoURL}
+		args = []string{"--ffmpeg-location", ffmpegLocation, "--newline", "-f", formatID, "-x", "--audio-format", "mp3", "-o", savePath, videoURL}
 	} else {
 		// Try to get best audio combined with selected video if ffmpeg is available, otherwise just use formatID
-		args = []string{"--ffmpeg-location", getExeDir(), "--newline", "-f", fmt.Sprintf("%s+bestaudio/best", formatID), "--merge-output-format", "mp4", "-o", savePath, videoURL}
+		args = []string{"--ffmpeg-location", ffmpegLocation, "--newline", "-f", fmt.Sprintf("%s+bestaudio/best", formatID), "--merge-output-format", "mp4", "-o", savePath, videoURL}
 	}
 
 	if a.cookieBrowser != "" && a.cookieBrowser != "none" {

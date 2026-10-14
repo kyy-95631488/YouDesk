@@ -43,12 +43,14 @@
 
 ## 📥 Pilihan Unduhan & Distribusi
 
-Anda dapat memilih dua tipe paket instalasi sesuai kebutuhan di [**GitHub Releases**](https://github.com/kyy-95631488/YouDesk/releases):
+Anda dapat memilih paket instalasi sesuai dengan sistem operasi Anda di [**GitHub Releases**](https://github.com/kyy-95631488/YouDesk/releases):
 
-| Tipe Paket | File Output | Target Penggunaan |
-| :--- | :--- | :--- |
-| **Standalone Installer** | `YouTubeDESK-Installer-v1.0.0.exe` | **Direkomendasikan untuk PC/Laptop utama**. Installer resmi berbasis Inno Setup 6, membuat Start Menu & Desktop Shortcut, otomatis include engine offline, dan memiliki uninstaller resmi di Windows Settings. |
-| **Portable Edition (ZIP)** | `YouTubeDESK-Portable.zip` | **Plug & Play / Flashdisk**. Cukup ekstrak ZIP ke folder mana saja dan langsung jalankan `YouTubeDESK.exe` tanpa proses instalasi apa pun. Semua komponen offline sudah include. |
+| Platform | Tipe Paket | File Output | Keterangan & Penggunaan |
+| :--- | :--- | :--- | :--- |
+| **Windows** | **Standalone Installer** | `YouTubeDESK-Installer-v1.0.0.exe` | **Direkomendasikan untuk Windows 10/11**. Installer resmi (Inno Setup 6) dengan Start Menu, Desktop Shortcut, dan uninstaller terdaftar di Control Panel. |
+| **Windows** | **Portable Edition (ZIP)** | `YouTubeDESK-Portable.zip` | **Plug & Play**. Ekstrak dan langsung jalankan `YouTubeDESK.exe` dari flashdisk / folder tanpa instalasi. |
+| **Ubuntu / Debian** | **Debian Package (.deb)** | `youdesk_*_amd64.deb` | **Installer Resmi Ubuntu/Debian**. Pasang dengan `sudo dpkg -i youdesk_*_amd64.deb`, otomatis masuk ke app launcher sistem. |
+| **Linux (Semua Distro)** | **Portable Archive (.tar.gz)** | `YouTubeDESK-linux-amd64.tar.gz` | **Generic Linux Standalone**. Ekstrak dan langsung jalankan binary `./YouDesk` di distribusi Linux x64 apa pun. |
 
 ---
 

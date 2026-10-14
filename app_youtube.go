@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
-	"path/filepath"
-	"runtime"
 	"strings"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -15,11 +13,7 @@ import (
 
 // SearchVideos uses yt-dlp to search for videos
 func (a *App) SearchVideos(query string, limit int, offset int) ([]VideoResult, error) {
-	ext := ""
-	if runtime.GOOS == "windows" {
-		ext = ".exe"
-	}
-	binName := filepath.Join(getExeDir(), "yt-dlp"+ext)
+	binName := getYtDlpPath()
 
 	totalToFetch := offset + limit
 
@@ -92,11 +86,7 @@ func (a *App) GetPopularVideos(limit int, offset int) ([]VideoResult, error) {
 
 // GetChannelVideos uses yt-dlp to get a channel's videos using pagination
 func (a *App) GetChannelVideos(channelUrl string, limit int, offset int) ([]VideoResult, error) {
-	ext := ""
-	if runtime.GOOS == "windows" {
-		ext = ".exe"
-	}
-	binName := filepath.Join(getExeDir(), "yt-dlp"+ext)
+	binName := getYtDlpPath()
 
 	start := offset + 1
 	end := offset + limit
@@ -155,11 +145,7 @@ func (a *App) GetChannelVideos(channelUrl string, limit int, offset int) ([]Vide
 
 // GetVideoDetails gets full details including playable URLs
 func (a *App) GetVideoDetails(videoURL string) (*VideoDetails, error) {
-	ext := ""
-	if runtime.GOOS == "windows" {
-		ext = ".exe"
-	}
-	binName := filepath.Join(getExeDir(), "yt-dlp"+ext)
+	binName := getYtDlpPath()
 
 	args := []string{"-j", videoURL}
 	if a.cookieBrowser != "" && a.cookieBrowser != "none" {
@@ -205,11 +191,7 @@ func (a *App) GetVideoDetails(videoURL string) (*VideoDetails, error) {
 
 // GetChannelPlaylists fetches all playlists from a channel's /playlists page
 func (a *App) GetChannelPlaylists(channelUrl string) ([]PlaylistResult, error) {
-	ext := ""
-	if runtime.GOOS == "windows" {
-		ext = ".exe"
-	}
-	binName := filepath.Join(getExeDir(), "yt-dlp"+ext)
+	binName := getYtDlpPath()
 
 	// Ensure we hit the /playlists tab
 	baseUrl := strings.TrimRight(channelUrl, "/")
@@ -274,11 +256,7 @@ func (a *App) GetChannelPlaylists(channelUrl string) ([]PlaylistResult, error) {
 
 // GetChannelInfo fetches metadata for a YouTube channel by getting the first video's metadata
 func (a *App) GetChannelInfo(channelUrl string) (*ChannelInfo, error) {
-	ext := ""
-	if runtime.GOOS == "windows" {
-		ext = ".exe"
-	}
-	binName := filepath.Join(getExeDir(), "yt-dlp"+ext)
+	binName := getYtDlpPath()
 
 	// Fetch the first 1 video from the channel to get channel metadata
 	videosUrl := channelUrl
