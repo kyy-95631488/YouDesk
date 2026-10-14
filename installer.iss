@@ -1,8 +1,10 @@
 ; Script generated for Inno Setup 6
 #define MyAppName "YouTube Desktop"
+#ifndef MyAppVersion
 #define MyAppVersion "1.0.0"
+#endif
 #define MyAppPublisher "kyy-95631488"
-#define MyAppURL "https://github.com/kyy-95631488/YouTubeDESK"
+#define MyAppURL "https://github.com/kyy-95631488/YouDesk"
 #define MyAppExeName "YouTubeDESK.exe"
 
 [Setup]
@@ -21,7 +23,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 DisableProgramGroupPage=yes
 PrivilegesRequiredOverridesAllowed=dialog commandline
 OutputDir=dist\standalone
-OutputBaseFilename=YouTubeDESK-Installer-v1.0.0
+OutputBaseFilename=YouTubeDESK-Installer-v{#MyAppVersion}
 SetupIconFile=build\windows\icon.ico
 SolidCompression=yes
 Compression=lzma2/ultra64

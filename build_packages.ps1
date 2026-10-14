@@ -1,8 +1,7 @@
-# build_packages.ps1
-# Script otomatisasi build versi Standalone (Inno Setup Installer) dan Portable (ZIP)
 param(
     [ValidateSet("standalone", "portable", "all", "clean")]
-    [string]$Target = "all"
+    [string]$Target = "all",
+    [string]$Version = "1.0.0"
 )
 
 $ErrorActionPreference = "Stop"
@@ -96,14 +95,13 @@ if ($Target -eq "standalone" -or $Target -eq "all") {
         Write-Host "  Silakan pasang Inno Setup 6 dari https://jrsoftware.org/isdl.php" -ForegroundColor Red
     } else {
         Write-Host "  -> Menggunakan Inno Setup Compiler: $isccPath" -ForegroundColor DarkCyan
-        $issFile = Join-Path $WorkspaceRoot "installer.iss"
-        
-        & $isccPath $issFile
+        $cleanVer = $Version.TrimStart('v')
+        & $isccPath "/DMyAppVersion=$cleanVer" $issFile
         if ($LASTEXITCODE -eq 0) {
-            $installerExe = Join-Path $standaloneDir "YouTubeDESK-Installer-v1.0.0.exe"
-            if (Test-Path $installerExe) {
-                $installerSize = [math]::Round((Get-Item $installerExe).Length / 1MB, 2)
-                Write-Host "  -> Standalone Installer: $installerExe ($installerSize MB)" -ForegroundColor Green
+            $installerExe = Get-ChildItem -Path $standaloneDir -Filter "*Installer*.exe" | Select-Object -First 1
+            if ($installerExe) {
+                $installerSize = [math]::Round($installerExe.Length / 1MB, 2)
+                Write-Host "  -> Standalone Installer: $($installerExe.FullName) ($installerSize MB)" -ForegroundColor Green
             }
         } else {
             Write-Host "  Gagal mengompilasi installer dengan Inno Setup!" -ForegroundColor Red
