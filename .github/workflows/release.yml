@@ -311,10 +311,10 @@ jobs:
           name: linux-assets
           path: release-assets
 
-      - name: Flatten All Assets
+      - name: Verify All Downloaded Assets
         run: |
-          find release-assets -type f -exec mv -t release-assets {} +
-          find release-assets -mindepth 1 -type d -delete
+          find release-assets -mindepth 2 -type f -exec mv -t release-assets {} + 2>/dev/null || true
+          find release-assets -mindepth 1 -type d -delete 2>/dev/null || true
           echo "=== All Final Release Assets to Publish ==="
           ls -lh release-assets
 
